@@ -12,6 +12,7 @@ Guluton是一个基于go-cqhttp开发的qq机器人，具体功能参见文档
 
 自行在源码修改qq号，你大概需要修改管理员qq号以及机器人qq号
 需要创建dict文件夹，用于存放匹配字典
+dict文件格式参考song.txt
 需要创建cookie文件夹，方便爬取网易云音乐时所需的登录事项
 使用了python3.8进行开发，需要自行添加python库
 
