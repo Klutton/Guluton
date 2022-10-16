@@ -1,7 +1,7 @@
 import socket
 import datetime
 #import time
-import json
+import json as json_
 import os
 #import asyncio
 import requests
@@ -31,6 +31,25 @@ print("用于接收消息\n**********************")
 #######################################################################
 
 
+groupposition = r'C:\Users\86153\Desktop\Guluton\group_manage'
+
+class Groups:
+    group = {}
+
+#方便读取各种字典
+class IO:
+    def dict_reader(fileposition):
+        with open(fileposition, 'r', encoding='utf-8') as fr:
+            result = json_.loads(fr.read())
+        print(f"载入位于{fileposition}")
+        return result
+
+    def dict_writer(fileposition,new_dict):
+        with open(fileposition, 'w', encoding='utf-8') as fr:
+            fr.write(json_.dumps(new_dict))
+        print(f"写入位于{fileposition}")
+        return
+
 #自动读取本地字典并存入内存
 class Dicts:
     dictlist = {}
@@ -45,7 +64,7 @@ class Dicts:
             filename = file + '/' + list[i]
             #注意转义一下哦
             with open(filename, 'r', encoding='utf-8') as fr:
-                Dicts.add_dict(Dicts, list[i] ,json.loads(fr.read()))
+                Dicts.add_dict(Dicts, list[i] ,json_.loads(fr.read()))
             print("已载入",list[i])
             #print("字典列表",Dicts.dictlist)
         return
@@ -61,7 +80,7 @@ class MusicUserLogin:
         print("搜索并载入网易云音乐用户")
         #注意转义一下哦
         with open(path, 'r', encoding='utf-8') as fr:
-            MusicUserLogin.cookie = json.loads(fr.read())
+            MusicUserLogin.cookie = json_.loads(fr.read())
         #print(MusicUserLogin.cookie)
         #print(type(MusicUserLogin.cookie))
         print("已载入", path)
@@ -72,7 +91,7 @@ class RecvMsg:
     def request_to_json(msg):#检测request里是否有json消息
         for i in range(len(msg)):
             if msg[i] == "{" and msg[-2] == "}":#寻找大括号，返回json
-                return json.loads(msg[i:])
+                return json_.loads(msg[i:])
 
         print("**********************\nError: 接收到的信息中无json\n**********************")
         return #如果没找到json，报错直接return
@@ -92,7 +111,7 @@ class RecvMsg:
 class SendMsg:
     def msg_sender(self, dict , param):
         send = requests.post(url="http://127.0.0.1:5700"+param , json=dict)
-        response = json.loads(send.text)
+        response = json_.loads(send.text)
         if response["retcode"] == 0 and response["status"] == "ok":
             log =  "##发送消息\n返回码：" + str(response["retcode"])
             try:
@@ -254,6 +273,53 @@ class RecvHandler:
                 elif json["raw_message"][selecter:] in ["整个活",'小亮给他整个活','草，走，忽略','整活']:
                     payload["message"] = '[CQ:image,file=zhenggehuo.gif]菊花喷火算吧？'
                     SendMsg.msg_sender(SendMsg, payload, param)
+                #增删group组
+                elif json["raw_message"][selecter:selecter+3] in ['add','del'] and json['user_id'] == Secure.admin:
+                    for i in range(selecter+3, len(json['raw_message'])):
+                        if json['raw_message'][i] != " ":
+                            json['raw_message'] = json['raw_message'][0:selecter+3] + json['raw_message'][i:]
+                            break
+                    print(json['raw_message'])
+                    if json["raw_message"][selecter:selecter+3] == 'add':
+                        group_type = json["raw_message"][selecter+3:]
+                        if not group_type in Groups.group['type_list']:
+                            print('$$$$增删组事件：无更改')
+                            payload["message"] = '无该类型'
+                            SendMsg.msg_sender(SendMsg, payload, param)
+                            return
+                        if json['group_id'] in Groups.group[group_type]:
+                            print('$$$$增删组事件：无更改')
+                            payload["message"] = '已存在'
+                            SendMsg.msg_sender(SendMsg, payload, param)
+                            return
+                        else:
+                            Groups.group[group_type].append(json['group+id'])
+                            IO.dict_writer(groupposition,json_.dumps(Groups.group))
+                            print(f'$$$$增删组事件：\n增加了{group_type}类型：群号{json["group_id"]}')
+                            payload["message"] = '已增加'
+                            SendMsg.msg_sender(SendMsg, payload, param)
+                            return
+                    if json["raw_message"][selecter:selecter+3] == 'del':
+                        group_type = json["raw_message"][selecter+3:]
+                        if not group_type in Groups.group['type_list']:
+                            print('$$$$增删组事件：无更改')
+                            payload["message"] = '无该类型'
+                            SendMsg.msg_sender(SendMsg, payload, param)
+                            return
+                        if not json['group_id'] in Groups.group[group_type]:
+                            print('$$$$增删组事件：无更改')
+                            payload["message"] = '不存在'
+                            SendMsg.msg_sender(SendMsg, payload, param)
+                            return
+                        else:
+                            Groups.group[group_type].remove(json['group_id'])
+                            IO.dict_writer(groupposition, json_.dumps(Groups.group))
+                            print(f'$$$$增删组事件：\n删除了{group_type}类型：群号{json["group_id"]}')
+                            payload["message"] = '已删除'
+                            SendMsg.msg_sender(SendMsg, payload, param)
+                            return
+
+
                 else:
                     payload["message"] = "[CQ:at,qq=" + str(json["user_id"]) + "]?"
                     SendMsg.msg_sender(SendMsg, payload, param)
@@ -635,6 +701,8 @@ def main():
     print("====")
     MusicUserLogin.get_cookie(MusicUserLogin, r"C:\\Users\86153\Desktop\Guluton\netease\cookie.txt")
     NeteaseMusicCrawler.add_cookie(MusicUserLogin.cookie)
+    print('====')
+    Groups.group = IO.dict_reader(groupposition + '\groups.txt')
 
     while(1):
         msg = RecvMsg.msg_rec(RecvMsg)
