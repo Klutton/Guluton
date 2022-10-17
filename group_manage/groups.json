@@ -1,0 +1,6 @@
+{
+  "type_list": [ "dictplay", "alarm", "render" ],
+  "dictplay": [ 23333333, 66666666 ],
+  "alarm": [ 114514 ],
+  "render": [ 1919810 ]
+}
