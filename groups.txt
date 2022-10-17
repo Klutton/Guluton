@@ -1,1 +1,0 @@
-{"type_list":["dictplay","alarm","render"],"dictplay":[123123],"alarm":[123123,345345],"render":[114514]}
