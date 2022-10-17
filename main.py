@@ -8,7 +8,6 @@ import requests
 import re
 #import random
 import sys
-sys.path.append(r'C:\Users\86153\Desktop\Guluton')
 import NeteaseMusicCrawler
 import NeteaseMusicCrawler as MC
 #from selenium import webdriver
@@ -30,21 +29,25 @@ print("**********************\n已经设置监听socket位于 127.0.0.1:5701")
 print("用于接收消息\n**********************")
 #######################################################################
 
-
-groupposition = r'C:\Users\86153\Desktop\Guluton\group_manage'
+class Config:
+    groupposition = ''
+    dictposition = ''
+    importposition = ''
+    cookieposition = ''
 
 class Groups:
     group = {}
 
 #方便读取各种字典
 class IO:
-    def dict_reader(fileposition):
+
+    def dict_reader(self,fileposition):
         with open(fileposition, 'r', encoding='utf-8') as fr:
             result = json_.loads(fr.read())
         print(f"载入位于{fileposition}")
         return result
 
-    def dict_writer(fileposition,new_dict):
+    def dict_writer(self,fileposition,new_dict):
         with open(fileposition, 'w', encoding='utf-8') as fr:
             fr.write(json_.dumps(new_dict))
         print(f"写入位于{fileposition}")
@@ -197,9 +200,9 @@ class RecvHandler:
             param = "/send_group_msg"
             #print(json)
             #判断是否at自己
-            if json["raw_message"][0:21] == "[CQ:at,qq=3444837140]" or json["raw_message"][0:8] == '@Guluton':
+            if json["raw_message"][0:21] == f"[CQ:at,qq={Secure.bot}]" or json["raw_message"][0:8] == '@Guluton':
                 selecter = 0
-                if json["raw_message"][0:21] == "[CQ:at,qq=3444837140]":
+                if json["raw_message"][0:21] == f"[CQ:at,qq={Secure.bot}]":
                     selecter = 21
                 elif json["raw_message"][0:8] == '@Guluton':
                     selecter = 8
@@ -225,7 +228,7 @@ class RecvHandler:
                 elif json["raw_message"][selecter:] in ["重载字典"]:
                     feedback = ""
                     if(json["user_id"] == Secure.admin):
-                        Dicts.dict_searcher(Dicts, "C:\\Users\86153\Desktop\Guluton\dicts")
+                        Dicts.dict_searcher(Dicts, Config.dictposition)
                         feedback = "重载了：\n" + str(Dicts.lists)
                     else:
                         feedback = "你不是我的master，去联系他吧"
@@ -293,8 +296,8 @@ class RecvHandler:
                             SendMsg.msg_sender(SendMsg, payload, param)
                             return
                         else:
-                            Groups.group[group_type].append(json['group+id'])
-                            IO.dict_writer(groupposition,json_.dumps(Groups.group))
+                            Groups.group[group_type].append(json['group_id'])
+                            IO.dict_writer(IO,Config.groupposition,Groups.group)
                             print(f'$$$$增删组事件：\n增加了{group_type}类型：群号{json["group_id"]}')
                             payload["message"] = '已增加'
                             SendMsg.msg_sender(SendMsg, payload, param)
@@ -313,7 +316,7 @@ class RecvHandler:
                             return
                         else:
                             Groups.group[group_type].remove(json['group_id'])
-                            IO.dict_writer(groupposition, json_.dumps(Groups.group))
+                            IO.dict_writer(IO,Config.groupposition, Groups.group)
                             print(f'$$$$增删组事件：\n删除了{group_type}类型：群号{json["group_id"]}')
                             payload["message"] = '已删除'
                             SendMsg.msg_sender(SendMsg, payload, param)
@@ -573,7 +576,7 @@ class RecvHandler:
                 rank += 1
                 #合并转发音乐有问题，等待官方修复
                 '''new_payload = {}
-                new_payload['user_id'] = 1103688627
+                new_payload['user_id'] = 
                 new_payload['message'] = "[CQ:music,type=163,id=" + str(id_list[i]) + "]"
                 msg_id = {}
                 msg_id = SendMsg.msg_sender(SendMsg, new_payload, '/send_private_msg')
@@ -583,7 +586,7 @@ class RecvHandler:
                 cq_data['type'] = 'node'
                 cq_data['data'] = {}
                 cq_data['data']['name'] = str(rank)
-                cq_data['data']['uin'] = 3444837140
+                cq_data['data']['uin'] = Secure.bot
                 cq_data['data']['content'] = []
                 content = {}
                 content['type'] = 'text'
@@ -618,7 +621,7 @@ class RecvHandler:
                         '' + song_info[id]['song_author'] + '\n链接：https://music.163.com/#/song?id=' + id
                 if id != song_info['song_id_list'][-1]:
                     msg += '\n'
-            content = [{"type": "node","data": {"name": "Guluton酱","uin": "3444837140","content": [{"type": "text","data": {"text":msg}}]}}]
+            content = [{"type": "node","data": {"name": "Guluton酱","uin": str(Secure.bot),"content": [{"type": "text","data": {"text":msg}}]}}]
             new_payload['messages'] = content
             print('（发送了合并消息）')
             SendMsg.msg_sender(SendMsg, new_payload, '/send_group_forward_msg')
@@ -650,7 +653,8 @@ class RecvHandler:
 
 
 class Secure:
-    admin = 1103688627
+    bot = 0
+    admin = 0
     code = ""
     temp_code = ""
     temp_code_status = False
@@ -695,14 +699,23 @@ class Secure:
 
 
 def main():
+    config = IO.dict_reader(IO,'config.json')
+    Config.groupposition = config['groupposition']
+    Config.dictposition = config['dictposition']
+    Config.importposition = config['importposition']
+    Config.cookieposition = config['cookieposition']
+    Secure.admin = config['admin_id']
+    Secure.bot = config['bot_id']
+
+    sys.path.append(Config.importposition)
     #Secure.code = Secure.secure_code_generate(Secure, 32)
     #os.system('"C:\\Users\86153\Desktop\q-robot\go-cqhttp_windows_386.exe"')
-    Dicts.dict_searcher(Dicts, "C:\\Users\86153\Desktop\Guluton\dicts")
+    Dicts.dict_searcher(Dicts, Config.dictposition)
     print("====")
-    MusicUserLogin.get_cookie(MusicUserLogin, r"C:\\Users\86153\Desktop\Guluton\netease\cookie.txt")
+    MusicUserLogin.get_cookie(MusicUserLogin, Config.cookieposition)
     NeteaseMusicCrawler.add_cookie(MusicUserLogin.cookie)
     print('====')
-    Groups.group = IO.dict_reader(groupposition + '\groups.txt')
+    Groups.group = IO.dict_reader(IO,Config.groupposition)
 
     while(1):
         msg = RecvMsg.msg_rec(RecvMsg)
