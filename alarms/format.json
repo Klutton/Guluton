@@ -1,0 +1,65 @@
+{
+  "alarm_id": [ "id1", "id2","id3","id4" ],
+
+  "id1": {
+    "set_by": 114514,
+    "alarm_name": "name",
+    "alarm_time": 20221016080000,
+    "alarm_target": {
+      "group_id": [ 23333, 666666 ],
+      "user_id": [ 114514, 1919810 ]
+    },
+    "alarm_message": [ "爷每周这几天都响" ],
+    "snooze": [ 1000, 1500 ],
+    "repeat": {
+      "repeat_type": "week",
+      "day": [ 1, 2, 3, 4, 5 ]
+    }
+  },
+
+  "id2": {
+    "set_by": 114514,
+    "alarm_name": "name",
+    "alarm_time": 20221016080000,
+    "alarm_target": {
+      "group_id": [ 23333, 666666 ],
+      "user_id": [ 114514, 1919810 ]
+    },
+    "alarm_message": [ "爷每天都响" ],
+    "snooze": [ 1000, 1500 ],
+    "repeat": {
+      "repeat_type": "day",
+      "every": 1
+    }
+  },
+
+  "id3": {
+    "set_by": 114514,
+    "alarm_name": "name",
+    "alarm_time": 20221016080000,
+    "alarm_target": {
+      "group_id": [ 23333, 666666 ],
+      "user_id": [ 114514, 1919810 ]
+    },
+    "alarm_message": [ "哈哈！爷是你的小睡闹钟！" ],
+    "snooze": [],
+    "repeat": {
+      "repeat_type": "son"
+    }
+  },
+
+  "id4": {
+    "set_by": 114514,
+    "alarm_name": "name",
+    "alarm_time": 20221016080000,
+    "alarm_target": {
+      "group_id": [ 23333, 666666 ],
+      "user_id": [ 114514, 1919810 ]
+    },
+    "alarm_message": [ "老子只给你响一次！" ],
+    "snooze": [],
+    "repeat": {
+      "repeat_type": "no"
+    }
+  }
+}

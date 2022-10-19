@@ -8,6 +8,7 @@ import requests
 import re
 #import random
 import sys
+import AlarmBroadcast
 import NeteaseMusicCrawler
 import NeteaseMusicCrawler as MC
 #from selenium import webdriver
@@ -16,24 +17,24 @@ import NeteaseMusicCrawler as MC
 #######################################################################
 #初始化监听端口
 ListenSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-ListenSocket.bind(('127.0.0.1', 5701))
-ListenSocket.listen(100)
 
 #初始化响应头
 HttpResponseHeader = 'HTTP/1.1 200 OK\r\n'
 HttpResponseHeader += 'Content-Type:text/html\r\n'
 HttpResponseHeader += '\r\n'
 HttpResponseHeader += '<h1>hi, Guluton!</h1>'
-
-print("**********************\n已经设置监听socket位于 127.0.0.1:5701")
-print("用于接收消息\n**********************")
 #######################################################################
 
 class Config:
+    listenip = '127.0.0.1'
+    listenport = 5701
+    sendip = '127.0.0.1'
+    sendport = 5700
     groupposition = ''
     dictposition = ''
     importposition = ''
     cookieposition = ''
+    alarmposition = ''
 
 class Groups:
     group = {}
@@ -113,7 +114,7 @@ class RecvMsg:
 #发送信息
 class SendMsg:
     def msg_sender(self, dict , param):
-        send = requests.post(url="http://127.0.0.1:5700"+param , json=dict)
+        send = requests.post(url=f"http://{Config.sendip}:{Config.sendport}"+param , json=dict)
         response = json_.loads(send.text)
         if response["retcode"] == 0 and response["status"] == "ok":
             log =  "##发送消息\n返回码：" + str(response["retcode"])
@@ -125,7 +126,7 @@ class SendMsg:
             RecvHandler.log_sender(RecvHandler, "确认信息已发送\n")
             return response
         else:
-            RecvHandler.log_sender(RecvHandler, "Error：信息已发送，但不一定成功，返回码来自127.0.0.1:5700\n")
+            RecvHandler.log_sender(RecvHandler, f"Error：信息已发送，但不一定成功，返回码来自{Config.sendip}:{Config.sendport}\n")
             error = str(response["retcode"]) + " " + response["status"]+ " " + response["wording"]
             RecvHandler.log_sender(RecvHandler, error)
             RecvHandler.log_sender(RecvHandler, response)
@@ -162,19 +163,73 @@ class RecvHandler:
     #消息类型处理
     def msg_handler(self,json):
         #关键词检索：先判断群聊或私聊
-        #好友私聊
         payload = {}
+        #好友私聊
         if json["sub_type"] == "friend":
             RecvHandler.log_sender(RecvHandler, "log_head")
             payload["user_id"] = json["user_id"]  # 默认发送给发消息者
             param = "/send_private_msg"
             #测试用
-            if json["raw_message"][0:2] == "测试":
+            if json["raw_message"] == "测试":
                 payload["message"] = "你好吖"
                 SendMsg.msg_sender(SendMsg, payload ,param)
-            elif json["raw_message"][0:2] == "帮助":
-                payload["message"] = "你好，我是Guluton，关键词：\n测试\n仪表盘（需要令牌）"
+            elif json["raw_message"] == "帮助":
+                payload["message"] = "你好，我是Guluton，关键词：\n测试\n仪表盘（需要令牌）\nalarm"
                 return SendMsg.msg_sender(SendMsg  , payload , param)
+            elif json['raw_message'] == 'alarm':
+                #(1天/周后) 17:00(:30) 每周1,2,3/每2天 (小睡100,200,300) (名字：啦啦啦) (速速起床 某某图片)
+                payload["message"] = "中括号内为注释，括号内为非必选，括号不用加，注意区分中英文字符，空格，逗号等\n" \
+                                     "嗨，下面是闹钟相关用法：\n#1、设置一个闹钟：\n" \
+                                     "闹钟+(1天/周后【不写默认当天】)空格17:30(:30【注意为英文冒号，秒不填默认为00】)空格" \
+                                     "(每周1,2,3/每1天【注意为数字和英文逗号，不填默认只响一次】)" \
+                                     "空格(小睡100,200,300【不填默认没有，十位数和个位数为秒数，百位数以上为分钟数，不能超过30分钟59秒】)空格" \
+                                     "(名字：啦啦啦【注意为中文冒号，不加默认为”一个闹钟“】)空格(叫你时候发送的信息，用空格隔开)\n" \
+                                     "注：时间后面的几个可选附加条件顺序不是固定的，建议把叫你时候发送的信息放在后面；空格要加，不管加几个反正要加" \
+                                     "\n#2、发送你创建的闹钟以及相关信息：\n查询闹钟"\
+                                     "\n#3、删除已经创建的闹钟【已经激活的闹钟的无法关闭小睡闹钟】：\n删除闹钟+id【id先查询，空格有没有无所谓】"
+                SendMsg.msg_sender(SendMsg, payload, param)
+            #闹钟
+            elif json["raw_message"][0:2] == "闹钟":
+                message_info = json
+                message_info['set_by'] = json['user_id']
+                try:
+                    alarm_id = AlarmBroadcast.alarm_command(json["raw_message"][2:], message_info)
+                    if alarm_id == '格式错误':
+                        payload["message"] = "格式错误"
+                        SendMsg.msg_sender(SendMsg, payload, param)
+                        return
+                    payload["message"] = "已设置"
+                    SendMsg.msg_sender(SendMsg, payload, param)
+                    print(f'{json["user_id"]}创建了新闹钟')
+                    return
+                except:
+                    payload["message"] = "格式错误"
+                    SendMsg.msg_sender(SendMsg, payload, param)
+                    return
+            elif json["raw_message"] == "查询闹钟":
+                msg = ''
+                for alarm in AlarmBroadcast.Alarm.alarm['alarm_id']:
+                    if AlarmBroadcast.Alarm.alarm[alarm]['set_by'] == json['user_id'] and AlarmBroadcast.Alarm.alarm[alarm]['repeat']['repeat_type'] != 'son':
+                        msg += f'{AlarmBroadcast.Alarm.alarm[alarm]["alarm_name"]}:{alarm}' + '\n' + str(AlarmBroadcast.Alarm.alarm[alarm]) + '\n'
+                if msg == '':
+                    payload["message"] = "无"
+                    SendMsg.msg_sender(SendMsg, payload, param)
+                    return
+                payload['message'] = msg
+                SendMsg.msg_sender(SendMsg, payload, param)
+                return
+
+            elif json["raw_message"][0:4] == "删除闹钟":
+                for i in range(4, len(json["raw_message"])):
+                    if i != '':
+                        try:
+                            AlarmBroadcast.alarm_delete(json["raw_message"][i:])
+                            payload["message"] = "已删除"
+                            SendMsg.msg_sender(SendMsg, payload, param)
+                        except:
+                            payload["message"] = "未查询到"
+                            SendMsg.msg_sender(SendMsg, payload, param)
+                        return
             '''
             #令牌重置
             elif json["raw_message"][0:4] == "重置令牌":
@@ -189,9 +244,6 @@ class RecvHandler:
             '''
 
             return RecvHandler.log_sender(RecvHandler, "log_end")
-
-
-
 
 
         #群聊
@@ -237,7 +289,8 @@ class RecvHandler:
                 #帮助
                 elif json["raw_message"][selecter:] in ["帮助",'help','Help','/h','/help','/Help','-h','--help']:
                     payload["message"] = "[CQ:at,qq=" + str(json["user_id"]) + "]\n" \
-                                                                               "功能（需要at我）：网易云音乐，打招呼、帮助、发送'字典列表'获取字典、发送'重载字典'重载字典文件（需要管理员操作）\n" \
+                                                                               "功能（需要at我）：网易云音乐，alarm，打招呼、帮助、" \
+                                                                               "发送'字典列表'获取字典、发送'重载字典'重载字典文件（需要管理员操作）\n" \
                                                                                "不需要at我的：自动匹配聊天开头内容并回复固定内容\n" \
                                                                                "发送关键字播放《说的道理》\n" \
                                                                                "其余功能开发中。。。"
@@ -248,8 +301,20 @@ class RecvHandler:
                                          "\n#2、搜索歌曲：\n（搜索歌曲/搜索音乐）+（歌曲名）"\
                                          "\n#3、播放搜索结果内容\n播放+（歌曲名）+空格+（15以内数字，默认为1）"
                     SendMsg.msg_sender(SendMsg, payload, param)
+                elif json['raw_message'][selecter:] == 'alarm':
+                    #(1天/周后) 17:00(:30) 每周1,2,3/每2天 (小睡100,200,300) (名字：啦啦啦) (速速起床 某某图片)
+                    payload["message"] = "先联系bot管理员添加该功能，中括号内为注释，括号内为非必选，括号不用加，注意区分中英文字符，空格，逗号等\n" \
+                                         "嗨，下面是闹钟相关用法（先@我然后）：\n#1、设置一个闹钟：\n" \
+                                         "闹钟+(1天/周后【不写默认当天】)空格17:30(:30【注意为英文冒号，秒不填默认为00】)空格" \
+                                         "(每周1,2,3/每1天【注意为数字和英文逗号，不填默认只响一次】)" \
+                                         "空格(小睡100,200,300【不填默认没有，十位数和个位数为秒数，百位数以上为分钟数，不能超过30分钟59秒】)空格" \
+                                         "(名字：啦啦啦【注意为中文冒号，不加默认为”一个闹钟“】)空格(叫你时候发送的信息，用空格隔开)\n" \
+                                         "注：时间后面的几个可选附加条件顺序不是固定的，建议把叫你时候发送的信息放在后面；空格要加，不管加几个反正要加" \
+                                         "\n#2、发送你创建的闹钟以及相关信息：\n查询闹钟"\
+                                         "\n#3、删除已经创建的闹钟【已经激活的闹钟的无法关闭小睡闹钟】：\n删除闹钟+id【id先查询，空格有没有无所谓】"
+                    SendMsg.msg_sender(SendMsg, payload, param)
 
-                #网易云音乐
+                #网易云音乐需要重构，先搁置
                 elif json["raw_message"][selecter:selecter+2] == "播放":
                     print("##音乐事件")
                     RecvHandler.music_handler(RecvHandler,json["raw_message"][selecter:],payload,param)
@@ -272,6 +337,57 @@ class RecvHandler:
                         SendMsg.msg_sender(SendMsg, payload, param)
                         return
                     RecvHandler.music_search(RecvHandler,song_info,0,payload,param)
+
+                #闹钟
+                elif json["raw_message"][selecter:selecter + 2] == "闹钟" and json['group_id'] in Groups.group['alarm']:
+                    message_info = json
+                    message_info['set_by'] = json['user_id']
+                    try:
+                        alarm_id = AlarmBroadcast.alarm_command(json["raw_message"][selecter+2:], message_info)
+                        if alarm_id == '格式错误':
+                            payload["message"] = "格式错误"
+                            SendMsg.msg_sender(SendMsg, payload, param)
+                            return
+                        payload["message"] = "已设置"
+                        SendMsg.msg_sender(SendMsg, payload, param)
+                        return
+                        print(f'{json["user_id"]}创建了新闹钟')
+                    except:
+                        payload["message"] = "格式错误"
+                        SendMsg.msg_sender(SendMsg, payload, param)
+                    return
+
+                elif json["raw_message"][selecter:] == "查询闹钟" and json['group_id'] in Groups.group['alarm']:
+                    msg = ''
+                    for alarm in AlarmBroadcast.Alarm.alarm['alarm_id']:
+                        if AlarmBroadcast.Alarm.alarm[alarm]['set_by'] == json['user_id'] and \
+                                AlarmBroadcast.Alarm.alarm[alarm]['repeat']['repeat_type'] != 'son':
+                            msg += f'{AlarmBroadcast.Alarm.alarm[alarm]["alarm_name"]}:{alarm}' + '\n' + str(AlarmBroadcast.Alarm.alarm[alarm]) + '\n'
+                    if msg == '':
+                        payload["message"] = "无"
+                        SendMsg.msg_sender(SendMsg, payload, param)
+                        return
+                    new_content = {}
+                    content = [{"type": "node", "data": {"name": "Guluton酱", "uin": str(Secure.bot),
+                                                         "content": [{"type": "text", "data": {"text": msg}}]}}]
+                    new_content['messages'] = content
+                    new_content['group_id'] = json['group_id']
+                    print('（发送了合并消息）')
+                    SendMsg.msg_sender(SendMsg, new_content, '/send_group_forward_msg')
+                    return
+
+                elif json["raw_message"][selecter: selecter+4] == "删除闹钟" and json['group_id'] in Groups.group['alarm']:
+                    for i in range(selecter+4, len(json["raw_message"])):
+                        if i != '':
+                            try:
+                                AlarmBroadcast.alarm_delete(json["raw_message"][i:])
+                                payload["message"] = "已删除"
+                                SendMsg.msg_sender(SendMsg, payload, param)
+                            except:
+                                payload["message"] = "未查询到"
+                                SendMsg.msg_sender(SendMsg, payload, param)
+                            return
+
                 #整个活
                 elif json["raw_message"][selecter:] in ["整个活",'小亮给他整个活','草，走，忽略','整活']:
                     payload["message"] = '[CQ:image,file=zhenggehuo.gif]菊花喷火算吧？'
@@ -350,32 +466,33 @@ class RecvHandler:
                 SendMsg.msg_sender(SendMsg, payload, param)
                 return RecvHandler.log_sender(RecvHandler, "log_end")
             #字典自动检测与翻译
-            for name in Dicts.lists:
-                if json["raw_message"] in Dicts.dictlist[name]:
-                    if json["raw_message"] == '16****************head' or json["raw_message"] == '16****************end':
-                        return
-                    if type(Dicts.dictlist[name][json["raw_message"]]) == list:
-                        print(Dicts.dictlist[name][json["raw_message"]][0])
-                        payload["message"] = Dicts.dictlist[name]['16****************head'] + Dicts.dictlist[name][json["raw_message"]][0]
-                        RecvHandler.log_sender(RecvHandler, "log_head")
-                        SendMsg.msg_sender(SendMsg, payload, "/send_group_msg")
-                        for son in range(1,len(Dicts.dictlist[name][json["raw_message"]])):
-                            print(son)
-                            payload["message"] = Dicts.dictlist[name][json["raw_message"]][son]
+            if json['group_id'] in Groups.group['dictplay']:
+                for name in Dicts.lists:
+                    if json["raw_message"] in Dicts.dictlist[name]:
+                        if json["raw_message"] == '16****************head' or json["raw_message"] == '16****************end':
+                            return
+                        if type(Dicts.dictlist[name][json["raw_message"]]) == list:
+                            print(Dicts.dictlist[name][json["raw_message"]][0])
+                            payload["message"] = Dicts.dictlist[name]['16****************head'] + Dicts.dictlist[name][json["raw_message"]][0]
+                            RecvHandler.log_sender(RecvHandler, "log_head")
                             SendMsg.msg_sender(SendMsg, payload, "/send_group_msg")
-                        if Dicts.dictlist[name]['16****************end'] != "":
-                            payload["message"] = Dicts.dictlist[name]['16****************end']
-                            SendMsg.msg_sender(SendMsg , payload , "/send_group_msg")
-                        RecvHandler.log_sender(RecvHandler, "log_end")
+                            for son in range(1,len(Dicts.dictlist[name][json["raw_message"]])):
+                                print(son)
+                                payload["message"] = Dicts.dictlist[name][json["raw_message"]][son]
+                                SendMsg.msg_sender(SendMsg, payload, "/send_group_msg")
+                            if Dicts.dictlist[name]['16****************end'] != "":
+                                payload["message"] = Dicts.dictlist[name]['16****************end']
+                                SendMsg.msg_sender(SendMsg , payload , "/send_group_msg")
+                            RecvHandler.log_sender(RecvHandler, "log_end")
+                            return
+                        elif type(Dicts.dictlist[name][json["raw_message"]]) == str:
+                            print(Dicts.dictlist[name][json["raw_message"]])
+                            payload["message"] = Dicts.dictlist[name]['16****************head'] + \
+                                                 Dicts.dictlist[name][json["raw_message"]] + \
+                                                 Dicts.dictlist[name]['16****************end']
+                            RecvHandler.log_sender(RecvHandler, "log_head")
+                            SendMsg.msg_sender(SendMsg, payload, "/send_group_msg")
                         return
-                    elif type(Dicts.dictlist[name][json["raw_message"]]) == str:
-                        print(Dicts.dictlist[name][json["raw_message"]])
-                        payload["message"] = Dicts.dictlist[name]['16****************head'] + \
-                                             Dicts.dictlist[name][json["raw_message"]] + \
-                                             Dicts.dictlist[name]['16****************end']
-                        RecvHandler.log_sender(RecvHandler, "log_head")
-                        SendMsg.msg_sender(SendMsg, payload, "/send_group_msg")
-                    return
 
         return
 
@@ -696,28 +813,62 @@ class Secure:
             return SendMsg.msg_sender(SendMsg, payload, "/send_private_msg")
 '''
 
+class AlarmHandler:
+    def check(self):
+        #轮询闹钟
+        for id in AlarmBroadcast.Alarm.alarm['alarm_id']:
+            result = AlarmBroadcast.time_check(id)
+            #过滤报错
+            print(result)
+            if not result in ['不存在','超时'] and result != None:
+                payload = {}
+                #广播给群组
+                for group_id in result['alarm_target']['group_id']:
+                    payload['group_id'] = group_id
+                    for msg in result["alarm_message"]:
+                        payload['message'] = msg
+                        SendMsg.msg_sender(SendMsg, payload, "/send_group_msg")
+                for user_id in result['alarm_target']['user_id']:
+                    payload['user_id'] = user_id
+                    for msg in result["alarm_message"]:
+                        payload['message'] = msg
+                        SendMsg.msg_sender(SendMsg, payload, "/send_private_msg")
+        return
 
 
 def main():
     config = IO.dict_reader(IO,'config.json')
+    Config.listenip = config['listenip']
+    Config.listenport = config['listenport']
+    Config.sendip = config['sendip']
+    Config.sendport = config['sendport']
     Config.groupposition = config['groupposition']
     Config.dictposition = config['dictposition']
     Config.importposition = config['importposition']
     Config.cookieposition = config['cookieposition']
+    Config.alarmposition = config['alarmposition']
     Secure.admin = config['admin_id']
     Secure.bot = config['bot_id']
 
     sys.path.append(Config.importposition)
     #Secure.code = Secure.secure_code_generate(Secure, 32)
     #os.system('"C:\\Users\86153\Desktop\q-robot\go-cqhttp_windows_386.exe"')
+    ListenSocket.bind((Config.listenip, Config.listenport))
+    ListenSocket.listen(100)
+    print(f"**********************\n已经设置监听socket位于 {Config.listenip}:{Config.listenport}")
+    print("用于接收消息\n**********************")
     Dicts.dict_searcher(Dicts, Config.dictposition)
     print("====")
     MusicUserLogin.get_cookie(MusicUserLogin, Config.cookieposition)
     NeteaseMusicCrawler.add_cookie(MusicUserLogin.cookie)
     print('====')
     Groups.group = IO.dict_reader(IO,Config.groupposition)
+    print('已加载组\n====')
+    AlarmBroadcast.alarm_setup(Config.alarmposition)
+    print('已初始化Alarm')
 
     while(1):
+        AlarmHandler.check(AlarmHandler)
         msg = RecvMsg.msg_rec(RecvMsg)
         if msg != None:
             RecvHandler.main_handler(RecvHandler, msg)
