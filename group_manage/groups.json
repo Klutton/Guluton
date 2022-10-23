@@ -1,6 +1,7 @@
 {
-  "type_list": [ "dictplay", "alarm", "render" ],
+  "type_list": [ "dictplay", "alarm", "render", "全员核酸提醒" ],
   "dictplay": [ 23333333, 66666666 ],
   "alarm": [ 114514 ],
-  "render": [ 1919810 ]
+  "render": [ 1919810 ],
+  "全员核酸提醒": [666666]
 }

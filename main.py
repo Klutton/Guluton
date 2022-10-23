@@ -1,3 +1,4 @@
+import copy
 import socket
 import datetime
 #import time
@@ -8,6 +9,7 @@ import requests
 import re
 #import random
 import sys
+import MsgRender
 import AlarmBroadcast
 import NeteaseMusicCrawler
 import NeteaseMusicCrawler as MC
@@ -35,6 +37,42 @@ class Config:
     importposition = ''
     cookieposition = ''
     alarmposition = ''
+    timetableposition = ''
+
+def set_up():
+    config = IO.dict_reader(IO, 'config.json')
+    Config.listenip = config['listenip']
+    Config.listenport = config['listenport']
+    Config.sendip = config['sendip']
+    Config.sendport = config['sendport']
+    Config.groupposition = config['groupposition']
+    Config.dictposition = config['dictposition']
+    Config.importposition = config['importposition']
+    Config.cookieposition = config['cookieposition']
+    Config.alarmposition = config['alarmposition']
+    Config.timetableposition = config['timetableposition']
+    Secure.admin = config['admin_id']
+    Secure.bot = config['bot_id']
+
+    sys.path.append(Config.importposition)
+    # Secure.code = Secure.secure_code_generate(Secure, 32)
+    # os.system('"C:\\Users\86153\Desktop\q-robot\go-cqhttp_windows_386.exe"')
+    ListenSocket.bind((Config.listenip, Config.listenport))
+    ListenSocket.listen(100)
+    print(f"**********************\n已经设置监听socket位于 {Config.listenip}:{Config.listenport}")
+    print("用于接收消息\n**********************")
+    Dicts.dict_searcher(Dicts, Config.dictposition)
+    print("====")
+    MusicUserLogin.get_cookie(MusicUserLogin, Config.cookieposition)
+    NeteaseMusicCrawler.add_cookie(MusicUserLogin.cookie)
+    print('====')
+    Groups.group = IO.dict_reader(IO, Config.groupposition)
+    print('已加载组\n====')
+    AlarmBroadcast.alarm_setup(Config.alarmposition)
+    print('已初始化Alarm\n====')
+    MsgRender.set_up(Config.timetableposition)
+    print('已初始化Render\n====')
+    return
 
 class Groups:
     group = {}
@@ -50,7 +88,7 @@ class IO:
 
     def dict_writer(self,fileposition,new_dict):
         with open(fileposition, 'w', encoding='utf-8') as fr:
-            fr.write(json_.dumps(new_dict))
+            fr.write(json_.dumps(new_dict, ensure_ascii = False, indent=4))
         print(f"写入位于{fileposition}")
         return
 
@@ -102,7 +140,7 @@ class RecvMsg:
 
     def msg_rec(self):
         conn, Address = ListenSocket.accept()
-        Request = conn.recv(1024).decode(encoding='utf-8')
+        Request = conn.recv(4096).decode(encoding='utf-8')
         #print("New Request:\n", Request, sep="")
         rev_json = self.request_to_json(Request)
         #print("rev_json:\n", rev_json, "\n", "-"*20,  sep="")
@@ -173,6 +211,10 @@ class RecvHandler:
             if json["raw_message"] == "测试":
                 payload["message"] = "你好吖"
                 SendMsg.msg_sender(SendMsg, payload ,param)
+            elif json['raw_message'] == '重新载入':
+                set_up()
+                payload["message"] = "重载完毕"
+                SendMsg.msg_sender(SendMsg, payload ,param)
             elif json["raw_message"] == "帮助":
                 payload["message"] = "你好，我是Guluton，关键词：\n测试\n仪表盘（需要令牌）\nalarm"
                 return SendMsg.msg_sender(SendMsg  , payload , param)
@@ -210,7 +252,12 @@ class RecvHandler:
                 msg = ''
                 for alarm in AlarmBroadcast.Alarm.alarm['alarm_id']:
                     if AlarmBroadcast.Alarm.alarm[alarm]['set_by'] == json['user_id'] and AlarmBroadcast.Alarm.alarm[alarm]['repeat']['repeat_type'] != 'son':
-                        msg += f'{AlarmBroadcast.Alarm.alarm[alarm]["alarm_name"]}:{alarm}' + '\n' + str(AlarmBroadcast.Alarm.alarm[alarm]) + '\n'
+                        msg += f'{AlarmBroadcast.Alarm.alarm[alarm]["alarm_name"]}:{alarm}' + '\n' + \
+                               json_.dumps(AlarmBroadcast.Alarm.alarm[alarm], ensure_ascii = False, indent=4) + '\n'
+                    if AlarmBroadcast.Alarm.alarm[alarm]['set_by'] in ['admin','Admin'] and \
+                            json['user_id'] == Secure.admin:
+                        msg += f'{AlarmBroadcast.Alarm.alarm[alarm]["alarm_name"]}:{alarm}' + '\n' + \
+                               json_.dumps(AlarmBroadcast.Alarm.alarm[alarm], ensure_ascii=False, indent=4) + '\n'
                 if msg == '':
                     payload["message"] = "无"
                     SendMsg.msg_sender(SendMsg, payload, param)
@@ -223,9 +270,14 @@ class RecvHandler:
                 for i in range(4, len(json["raw_message"])):
                     if i != '':
                         try:
-                            AlarmBroadcast.alarm_delete(json["raw_message"][i:])
-                            payload["message"] = "已删除"
-                            SendMsg.msg_sender(SendMsg, payload, param)
+                            if AlarmBroadcast.Alarm.alarm[json["raw_message"][i:]]['set_by'] == json['user_id']:
+                                AlarmBroadcast.alarm_delete(json["raw_message"][i:])
+                                payload["message"] = "已删除"
+                                SendMsg.msg_sender(SendMsg, payload, param)
+                            elif AlarmBroadcast.Alarm.alarm[json["raw_message"][i:]]['set_by'] in ['admin','Admin'] and json['user_id'] == Secure.admin:
+                                AlarmBroadcast.alarm_delete(json["raw_message"][i:])
+                                payload["message"] = "已删除"
+                                SendMsg.msg_sender(SendMsg, payload, param)
                         except:
                             payload["message"] = "未查询到"
                             SendMsg.msg_sender(SendMsg, payload, param)
@@ -360,9 +412,11 @@ class RecvHandler:
                 elif json["raw_message"][selecter:] == "查询闹钟" and json['group_id'] in Groups.group['alarm']:
                     msg = ''
                     for alarm in AlarmBroadcast.Alarm.alarm['alarm_id']:
-                        if AlarmBroadcast.Alarm.alarm[alarm]['set_by'] == json['user_id'] and \
-                                AlarmBroadcast.Alarm.alarm[alarm]['repeat']['repeat_type'] != 'son':
-                            msg += f'{AlarmBroadcast.Alarm.alarm[alarm]["alarm_name"]}:{alarm}' + '\n' + str(AlarmBroadcast.Alarm.alarm[alarm]) + '\n'
+                        if AlarmBroadcast.Alarm.alarm[alarm]['set_by'] in ['admin','Admin'] and \
+                                AlarmBroadcast.Alarm.alarm[alarm]['repeat']['repeat_type'] != 'son'\
+                                and json['group_id'] in AlarmBroadcast.Alarm.alarm[alarm]['group_id']:
+                            msg += f'{AlarmBroadcast.Alarm.alarm[alarm]["alarm_name"]}:{alarm}' + '\n' + \
+                                   json_.dumps(AlarmBroadcast.Alarm.alarm[alarm], ensure_ascii = False, indent=4) + '\n'
                     if msg == '':
                         payload["message"] = "无"
                         SendMsg.msg_sender(SendMsg, payload, param)
@@ -380,9 +434,15 @@ class RecvHandler:
                     for i in range(selecter+4, len(json["raw_message"])):
                         if i != '':
                             try:
-                                AlarmBroadcast.alarm_delete(json["raw_message"][i:])
-                                payload["message"] = "已删除"
-                                SendMsg.msg_sender(SendMsg, payload, param)
+                                if AlarmBroadcast.Alarm.alarm[json["raw_message"][i:]]['set_by'] == json['user_id']:
+                                    AlarmBroadcast.alarm_delete(json["raw_message"][i:])
+                                    payload["message"] = "已删除"
+                                    SendMsg.msg_sender(SendMsg, payload, param)
+                                elif AlarmBroadcast.Alarm.alarm[json["raw_message"][i:]]['set_by'] in ['admin','Admin'] and json[
+                                    'user_id'] == Secure.admin:
+                                    AlarmBroadcast.alarm_delete(json["raw_message"][i:])
+                                    payload["message"] = "已删除"
+                                    SendMsg.msg_sender(SendMsg, payload, param)
                             except:
                                 payload["message"] = "未查询到"
                                 SendMsg.msg_sender(SendMsg, payload, param)
@@ -444,11 +504,30 @@ class RecvHandler:
                     SendMsg.msg_sender(SendMsg, payload, param)
                 return RecvHandler.log_sender(RecvHandler, "log_end")
 
+            #事件监视
+            if json['group_id'] in Groups.group['render']:
+                if json['raw_message'][0] == '【':
+                    for selecter in range(0,len(json['raw_message'])):
+                        if json['raw_message'][selecter] == '】':
+                            result = MsgRender.handler(json['raw_message'][1:selecter])
+                            result = copy.deepcopy(result)
+                            if result['type'] == '全员核酸':
+                                print(f'在{json["group_id"]}监测到全员核酸通知')
+                                for i in range(0,len(result['content'][1])):
+                                    #为每个闹钟加上日期
+                                    result['content'][1][i]['alarm_time'][1] = result['content'][0][0]
+                                    result['content'][1][i]['alarm_time'][2] = result['content'][0][1]
+                                    #为每个闹钟加上群聊
+                                    result['content'][1][i]['alarm_target']['group_id'] = Groups.group['全员核酸提醒']
+                                    #创建闹钟
+                                    new_id = AlarmBroadcast.get_id()
+                                    AlarmBroadcast.alarm_create(result['content'][1][i],new_id)
+                                return
+
             #说的道理
             if json["raw_message"][0:] in ["说的道理","啊米浴","阿米浴","说的道","阿米" , "啊米"]:
                 RecvHandler.log_sender(RecvHandler, "log_head")
-                payload["message"] = "有点社恐不敢唱了捏"
-                '''"正在向全体玩家高奏您的MVP凯歌:阿米浴说的道理\n" \
+                payload["message"] = "正在向全体玩家高奏您的MVP凯歌:阿米浴说的道理\n" \
                                      "[CQ:image,file=shuodedaoli.gif]" \
                                      "\n大家好啊，我是：说的道理~！" \
                                      "\n今天来点大家想看的东西啊" \
@@ -462,8 +541,12 @@ class RecvHandler:
                                      "\n啊嘛啊！波比是我爹" \
                                      "\n啊~喵内地手啊呵呵木有" \
                                      "\nhttps://www.bilibili.com/video/BV1JB4y1s7Dk/" \
-                                     "\n别急哦，将在90s后自动撤回（该功能正在开发）"'''
-                SendMsg.msg_sender(SendMsg, payload, param)
+                                     "\n别急哦，将在60s后自动撤回"
+                msg_id = SendMsg.msg_sender(SendMsg, payload, param)['data']['message_id']
+                #print(SendMsg.msg_sender(SendMsg, payload, param))
+
+                time_ = datetime.datetime.now() + datetime.timedelta(seconds = 60)
+                Secure.set_delay_command(Secure,'delete',msg_id,AlarmBroadcast.datetime_to_list(time_))
                 return RecvHandler.log_sender(RecvHandler, "log_end")
             #字典自动检测与翻译
             if json['group_id'] in Groups.group['dictplay']:
@@ -493,6 +576,12 @@ class RecvHandler:
                             RecvHandler.log_sender(RecvHandler, "log_head")
                             SendMsg.msg_sender(SendMsg, payload, "/send_group_msg")
                         return
+            '''if '何同学' in json['raw_message']:
+                payload['message'] = '⚠侦测到在途的何打击⚠\n⚠Heclear missile launch detected⚠\n' \
+                                     '[CQ:image,file=994103f8038941ccc8261164aafb5005.image,subType=1,' \
+                                     'url=https://gchat.qpic.cn/gchatpic_new/1103688627/583308472-3171020766-994103F8038941CCC8261164AAFB5005/0?term=3]' \
+                                     '\n拦截失败，建议按何报复指导进行何报复'
+                SendMsg.msg_sender(SendMsg, payload, "/send_group_msg")'''
 
         return
 
@@ -779,6 +868,16 @@ class Secure:
     temp_time = ""
     temp_level = 0
 
+    def set_delay_command(self,command_type,additionparam,time_):
+        AlarmBroadcast.alarm_construct('Admin', command_type, time_, {} , [command_type,additionparam], [], {"repeat_type": "command"})
+
+    def command(self,command_type,additionparam):
+        if command_type in ['delete']:
+            if command_type == 'delete':
+                print(f'安全指令：撤回{additionparam}')
+                SendMsg.msg_sender(SendMsg,{'message_id':additionparam},'/delete_msg')
+        return
+
 '''
     def secure_code_confirm(self, code):
         return
@@ -819,16 +918,21 @@ class AlarmHandler:
         for id in AlarmBroadcast.Alarm.alarm['alarm_id']:
             result = AlarmBroadcast.time_check(id)
             #过滤报错
-            print(result)
-            if not result in ['不存在','超时'] and result != None:
-                payload = {}
+            #print(result)
+            if result != None:
+                #执行管理命令
+                if result['repeat']['repeat_type'] == 'command':
+                    return Secure.command(Secure,result['alarm_message'][0],result['alarm_message'][1])
+
                 #广播给群组
                 for group_id in result['alarm_target']['group_id']:
+                    payload = {}
                     payload['group_id'] = group_id
                     for msg in result["alarm_message"]:
                         payload['message'] = msg
                         SendMsg.msg_sender(SendMsg, payload, "/send_group_msg")
                 for user_id in result['alarm_target']['user_id']:
+                    payload = {}
                     payload['user_id'] = user_id
                     for msg in result["alarm_message"]:
                         payload['message'] = msg
@@ -837,36 +941,9 @@ class AlarmHandler:
 
 
 def main():
-    config = IO.dict_reader(IO,'config.json')
-    Config.listenip = config['listenip']
-    Config.listenport = config['listenport']
-    Config.sendip = config['sendip']
-    Config.sendport = config['sendport']
-    Config.groupposition = config['groupposition']
-    Config.dictposition = config['dictposition']
-    Config.importposition = config['importposition']
-    Config.cookieposition = config['cookieposition']
-    Config.alarmposition = config['alarmposition']
-    Secure.admin = config['admin_id']
-    Secure.bot = config['bot_id']
+    set_up()
 
-    sys.path.append(Config.importposition)
-    #Secure.code = Secure.secure_code_generate(Secure, 32)
-    #os.system('"C:\\Users\86153\Desktop\q-robot\go-cqhttp_windows_386.exe"')
-    ListenSocket.bind((Config.listenip, Config.listenport))
-    ListenSocket.listen(100)
-    print(f"**********************\n已经设置监听socket位于 {Config.listenip}:{Config.listenport}")
-    print("用于接收消息\n**********************")
-    Dicts.dict_searcher(Dicts, Config.dictposition)
-    print("====")
-    MusicUserLogin.get_cookie(MusicUserLogin, Config.cookieposition)
-    NeteaseMusicCrawler.add_cookie(MusicUserLogin.cookie)
-    print('====')
-    Groups.group = IO.dict_reader(IO,Config.groupposition)
-    print('已加载组\n====')
-    AlarmBroadcast.alarm_setup(Config.alarmposition)
-    print('已初始化Alarm')
-
+    print('初始化完毕')
     while(1):
         AlarmHandler.check(AlarmHandler)
         msg = RecvMsg.msg_rec(RecvMsg)

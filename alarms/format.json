@@ -1,10 +1,10 @@
 {
-  "alarm_id": [ "id1", "id2","id3","id4" ],
+  "alarm_id": [ "id1", "id2","id3","id4","id5" ],
 
   "id1": {
     "set_by": 114514,
     "alarm_name": "name",
-    "alarm_time": 20221016080000,
+    "alarm_time": [2022,10,16,8,0,0,0],
     "alarm_target": {
       "group_id": [ 23333, 666666 ],
       "user_id": [ 114514, 1919810 ]
@@ -20,7 +20,7 @@
   "id2": {
     "set_by": 114514,
     "alarm_name": "name",
-    "alarm_time": 20221016080000,
+    "alarm_time": [2022,10,16,8,0,0,0],
     "alarm_target": {
       "group_id": [ 23333, 666666 ],
       "user_id": [ 114514, 1919810 ]
@@ -36,7 +36,7 @@
   "id3": {
     "set_by": 114514,
     "alarm_name": "name",
-    "alarm_time": 20221016080000,
+    "alarm_time": [2022,10,16,8,0,0,0],
     "alarm_target": {
       "group_id": [ 23333, 666666 ],
       "user_id": [ 114514, 1919810 ]
@@ -51,7 +51,7 @@
   "id4": {
     "set_by": 114514,
     "alarm_name": "name",
-    "alarm_time": 20221016080000,
+    "alarm_time": [2022,10,16,8,0,0,0],
     "alarm_target": {
       "group_id": [ 23333, 666666 ],
       "user_id": [ 114514, 1919810 ]
@@ -60,6 +60,21 @@
     "snooze": [],
     "repeat": {
       "repeat_type": "no"
+    }
+  },
+
+  "id5": {
+    "set_by": 114514,
+    "alarm_name": "name",
+    "alarm_time": [2022,10,16,8,0,0,0],
+    "alarm_target": {
+      "group_id": [ 23333, 666666 ],
+      "user_id": [ 114514, 1919810 ]
+    },
+    "alarm_message": [ "delete",114151 ],
+    "snooze": [],
+    "repeat": {
+      "repeat_type": "command"
     }
   }
 }

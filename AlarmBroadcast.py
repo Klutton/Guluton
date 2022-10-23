@@ -13,8 +13,6 @@ class SetupPosition:
     alarmposition = ""
 class Alarm:
     alarm = {}
-class Weekday:
-    day = {'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 7}
 class Transform:
     target = {'normal':'group_id','friend':'user_id'}
 
@@ -26,8 +24,24 @@ def get_id():
 
 
 #获取当前时间，返回类型为int
-def get_time():
+def get_int_time():
     return int(time.strftime("%Y%m%d%H%M%S"))
+
+
+#获取当前时间，返回类型为datetime
+def get_time():
+    return datetime.datetime.now()
+
+
+#将json储存的时间转为datetime
+def list_to_datetime(time_):
+    return datetime.datetime(time_[0],time_[1],time_[2],time_[3],time_[4],time_[5],time_[6])
+
+
+#将datetime转为列表
+def datetime_to_list(datetime_):
+    new_list = [datetime_.year,datetime_.month,datetime_.day,datetime_.hour,datetime_.minute,datetime_.second,datetime_.microsecond]
+    return new_list
 
 
 #接收并处理指令
@@ -49,7 +63,10 @@ def alarm_command(content,message_info):
     #初始化闹钟
     alarm_name = '一个闹钟'
     message = []
-    message.append(f'由{str(set_by)}设置的闹钟')
+    if not set_by in ['admin','Admin']:
+        message.append(f'由[CQ:at,qq={str(set_by)}]设置的闹钟响了')
+    else:
+        message.append(f'由{str(set_by)}设置的闹钟响了')
     repeat = {}
     repeat['repeat_type'] = 'no'
     snooze = []
@@ -63,31 +80,37 @@ def alarm_command(content,message_info):
     # 分离多空格
     while ('' in content_split):
         content_split.remove('')
-    # 开始分支结构
-    delta_day = 0
-    time_ = 0
+
+    time_ = datetime.datetime.now().replace(microsecond=0)
     # 只输入时间默认为当天
     if len(content_split) == 1:
         # 分离冒号
         exact_time = re.split(":", content_split[0])
-        time_ = int(exact_time[0]) * 10000 + int(exact_time[1]) * 100
+        time_ = time_.replace(hour=int(exact_time[0]))
+        time_ = time_.replace(minute=int(exact_time[1]))
+        time_ = time_.replace(second=0)
         if len(exact_time) == 3:
-            time_ += int(exact_time[2])
+            time_ = time_.replace(second=int(exact_time[2]))
     # 输入了几天后以及时间
     elif len(content_split) > 1:
         # 分离冒号
         selecter = 0
+        #看是否有输入几天后，默认今天
         if content_split[0][-1] == '后':
             selecter += 1
-        exact_time = re.split(":", content_split[selecter])
-        time_ = int(exact_time[0]) * 10000 + int(exact_time[1]) * 100
+        # 分离冒号
+        exact_time = re.split(":", content_split[0])
+        time_ = time_.replace(hour=int(exact_time[0]))
+        time_ = time_.replace(minute=int(exact_time[1]))
+        time_ = time_.replace(second=0)
         if len(exact_time) == 3:
-            time_ += int(exact_time[2])
+            time_ = time_.replace(second=int(exact_time[2]))
+
         if selecter == 1:
             if content_split[0][-2] == '天':
-                delta_day = int(content_split[0][:-2])
+                time_ += datetime.timedelta(days=int(content_split[0][:-2]))
             elif content_split[0][-2] == '周':
-                delta_day = int(content_split[0][:-2]) * 7
+                time_ += datetime.timedelta(weeks=int(content_split[0][:-2]))
 
         set_repeat = True
         set_snooze = True
@@ -95,6 +118,7 @@ def alarm_command(content,message_info):
         for words in range(selecter + 1, len(content_split)):
             # 匹配关键词
             if content_split[words][0] == '每' and set_repeat:
+                set_repeat = False
                 if content_split[words][1] == '周':
                     repeat['repeat_type'] = 'week'
                     repeat['day'] = []
@@ -108,35 +132,42 @@ def alarm_command(content,message_info):
                         return "格式错误"
                     for splitday in temp:
                         repeat['day'].append(splitday)
-                else:
+                elif content_split[words][1] == '天':
                     repeat['repeat_type'] = 'day'
                     stepday = int(content_split[words][1:-1])
                     if stepday < 1:
                         print('格式错误')
                         return "格式错误"
                     repeat['every'] = stepday
-                set_repeat = False
+                else:
+                    print('格式错误')
+                    return '格式错误'
+
             elif content_split[words][0:2] == '小睡' and set_snooze and content_split[words][2] in ['0', '1', '2', '3',
                                                                                                     '4', '5', '6', '7',
                                                                                                     '8', '9']:
+                set_snooze = False
+                #切分
                 temp = list(set(re.split(",", content_split[words][2:])))
+                #转为int和排序去除重复
                 for splitsnooze in range(0, len(temp)):
                     temp[splitsnooze] = int(temp[splitsnooze])
                 temp.sort()
                 for splitsnooze in temp:
-                    if splitsnooze > 3000 or int(splitsnooze%100) > 59:
+                    if splitsnooze < 1:
+                        print('格式错误')
                         return '格式错误'
                     snooze.append(splitsnooze)
-                set_snooze = False
             elif content_split[words][0:3] == '名字：' and set_name:
                 set_name = False
-                alarm_name = content_split[words][2:]
+                alarm_name = content_split[words][3:]
             else:
                 message.append(content_split[words])
 
-    time_ += int((datetime.datetime.now() + datetime.timedelta(days=delta_day)).strftime("%Y%m%d")) * 1000000
+    #确定闹钟是未来的闹钟
     if time_ < get_time():
         return '格式错误'
+    time_ = datetime_to_list(time_)
     #创建闹钟
     return alarm_construct(set_by,alarm_name,time_,target,message,snooze,repeat)
 
@@ -146,21 +177,26 @@ def time_check(id):
     #先判断是否存在该闹钟
     if not id in Alarm.alarm['alarm_id']:
         return "不存在"
-    #再判断时间是否超出1min
-    if get_time() > Alarm.alarm[id]['alarm_time'] + 100:
-        alarm_delete(id)
-        return "超时"
-    #再判断时间是否在1min以内
-    if get_time() in range(Alarm.alarm[id]['alarm_time'],Alarm.alarm[id]['alarm_time'] + 100):
+    alarm = copy.deepcopy(Alarm.alarm[id])
+    #转换成为datetime
+    switched_time = list_to_datetime(alarm['alarm_time'])
+    #先判断时间到达
+    if get_time() >= switched_time:
         #判断是否有小睡
-        if len(Alarm.alarm[id]['snooze']) != 0:
+        if len(alarm['snooze']) != 0:
             #继承并创建新的同名闹钟
-            for delay in Alarm.alarm[id]['snooze']:
-                new_snooze_alarm = copy.deepcopy(Alarm.alarm[id])
-                new_id = get_id()
+            for delay in alarm['snooze']:
+                new_snooze_alarm = copy.deepcopy(alarm)
+                new_delay = {}
+                new_delay['hour'] = int(delay/10000)
+                new_delay['minute'] = int((delay%10000)/100)
+                new_delay['second'] = int(delay%100)
                 #为新闹钟附加新的id
-                ##############################################################这里用的是现在的时间加延迟时间，为了避免丢失闹钟
-                new_snooze_alarm['alarm_time'] = get_time() + delay
+                new_id = get_id()
+                #为新闹钟格式化新时间
+                new_snooze_alarm['alarm_time'] = datetime_to_list(
+                    switched_time + datetime.timedelta(hours=new_delay['hour'], minutes=new_delay['minute'],
+                                                       seconds=new_delay['second']))
                 #重命名小睡闹钟
                 new_snooze_alarm['alarm_name'] += '(小睡闹钟)'
                 #消息附加
@@ -172,57 +208,46 @@ def time_check(id):
                 alarm_create(new_snooze_alarm,new_id)
 
         #判断是否有循环闹钟
-        if not Alarm.alarm[id]['repeat']['repeat_type'] in ['no','son']:
-            alarm_time = Alarm.alarm[id]['alarm_time']
-            if Alarm.alarm['repeat']['repeat_type'] == 'week':
+        if not alarm['repeat']['repeat_type'] in ['no','son']:
+            if alarm['repeat']['repeat_type'] == 'week':
                 #看今天是周几，匹配下一天,创建新闹钟
-                today = Weekday.day[time.strftime('%a')]
-                for i in range(0,len(Alarm.alarm['repeat']['day'])):
-                    #如果长度为1，说明为每周循环，直接日期+7
-                    if len(Alarm.alarm['repeat']['day']) == 1:
-                        new_time = int((datetime.datetime.now()+datetime.timedelta(days=7)).strftime("%Y%m%d"))*1000000 + int(alarm_time%1000000)
-                        new_alarm = {}
-                        new_id = get_id()
-                        new_alarm[new_id] = Alarm.alarm[id]
-                        new_alarm[new_id]['alarm_time'] = new_time
-                        alarm_create(new_alarm,new_id)
-                        break
-                    if Alarm.alarm['repeat']['day'][i] == today:
+                today = get_time().weekday()
+                for i in range(0,len(alarm['repeat']['day'])):
+                    if alarm['repeat']['day'][i] == today:
                         p = i+1
-                        if p == len(Alarm.alarm['repeat']['day']):
+                        if p == len(alarm['repeat']['day']):
                             p = 0
                         #下一天
-                        nextday = Alarm.alarm['repeat']['day'][p]
-                        if nextday < today:
+                        nextday = alarm['repeat']['day'][p]
+                        if nextday <= today:
                             nextday += 7
-                        new_time = int((datetime.datetime.now() + datetime.timedelta(days=(nextday - today))).strftime("%Y%m%d")) * 1000000 + int(
-                            alarm_time % 1000000)
-                        new_alarm = {}
+                        #新建一个只有时间不同的闹钟
+                        new_time = switched_time + datetime.timedelta(days=(nextday - today))
                         new_id = get_id()
-                        new_alarm[new_id] = Alarm.alarm[id]
-                        new_alarm[new_id]['alarm_time'] = new_time
+                        new_alarm = copy.deepcopy(alarm)
+                        new_alarm['alarm_time'] = datetime_to_list(new_time)
                         alarm_create(new_alarm, new_id)
                         break
 
-            if Alarm.alarm['repeat']['repeat_type'] == 'day':
-                step = Alarm.alarm[id]['repeat']['every']
-                new_time = int(
-                    (datetime.datetime.now() + datetime.timedelta(days=step)).strftime("%Y%m%d")) * 1000000 + int(
-                    alarm_time % 1000000)
-                new_alarm = {}
+            if alarm['repeat']['repeat_type'] == 'day':
+                # 新建一个只有时间不同的闹钟
+                step = alarm['repeat']['every']
+                new_time = switched_time + datetime.timedelta(days=step)
                 new_id = get_id()
-                new_alarm[new_id] = Alarm.alarm[id]
-                new_alarm[new_id]['alarm_time'] = new_time
+                new_alarm = copy.deepcopy(alarm)
+                new_alarm['alarm_time'] = datetime_to_list(new_time)
                 alarm_create(new_alarm, new_id)
 
-        #获取闹钟内容
-        alarm_result = Alarm.alarm[id]
+        #判断闹钟是否过迟响起
+        if get_time() - switched_time > datetime.timedelta(minutes=1) and not alarm['set_by'] in ['admin','Admin']:
+            alarm['alarm_message'].append( f'抱歉，由于服务器原因，您原定于{switched_time.replace(microsecond = 0)}'
+                                           f'的闹钟延迟响起了，延迟为{(get_time() - switched_time).seconds}秒' )
 
         #删除已经响了的闹钟
         alarm_delete(id)
-        print(f'闹钟响了{datetime.datetime.now()}')
+        print(f'闹钟响了{datetime.datetime.now().replace(microsecond=0)}')
         #返回闹钟json
-        return alarm_result
+        return alarm
 
 
 #删除闹钟
@@ -234,7 +259,7 @@ def alarm_delete(id):
 
 
 #构建一个闹钟
-def alarm_construct(setby: str, name: str,time_: int,target: dict,message: list,snooze: list,repeat: dict):
+def alarm_construct(setby: str, name: str,time_: list,target: dict,message: list,snooze: list,repeat: dict):
     new_alarm = {}
     new_id = get_id()
     new_alarm['set_by'] = setby
@@ -260,7 +285,7 @@ def alarm_create(json_,id):
 #将alarm信息存入json
 def alarm_save():
     with open(SetupPosition.alarmposition,'w',encoding='utf-8') as fr:
-        fr.write(json.dumps(Alarm.alarm))
+        fr.write(json.dumps(Alarm.alarm, ensure_ascii = False, indent=4))
     print('闹钟保存')
     return
 

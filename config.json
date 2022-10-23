@@ -1,8 +1,14 @@
 {
+  "listenip": "127.0.0.1",
+  "listenport": 5701,
+  "sendip": "127.0.0.1",
+  "sendport": 5700,
   "groupposition": "C:\\Users\\86153\\Desktop\\Guluton\\group_manage\\groups.json",
   "dictposition": "C:\\Users\\86153\\Desktop\\Guluton\\dicts",
   "importposition": "C:\\Users\\86153\\Desktop\\Guluton",
   "cookieposition": "C:\\Users\\86153\\Desktop\\Guluton\\netease\\cookie.json",
-  "admin_id": 114514,
-  "bot_id": 1919810
+  "alarmposition": "C:\\Users\\86153\\Desktop\\Guluton\\alarms\\alarms.json",
+  "timetableposition": "C:\\Users\\86153\\Desktop\\Guluton\\group_manage\\time_table.json",
+  "admin_id": 2333333,
+  "bot_id": 666666
 }

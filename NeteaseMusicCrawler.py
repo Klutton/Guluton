@@ -111,7 +111,7 @@ def get_songs(id,type_,number,mod):
 
 def get_search_songs(name):
     print(f'正在搜索歌曲：{name}')
-    link = 'https://music.163.com/#/search/m/?s=' + name + '&type=1'
+    link = 'https://music.163.com/#/search/m/?s=' + name + '&type=1'#+"&queryCorrect=false"
     driver.get(link)
     #搜索~
     try:

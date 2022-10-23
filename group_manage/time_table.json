@@ -1,0 +1,44 @@
+{
+  "全员核酸": [
+    {
+      "set_by": "admin",
+      "alarm_name": "全员核酸早晨提醒",
+      "alarm_time": [2022,1,1,8,0,0,0],
+      "alarm_target": {
+        "group_id": [],
+        "user_id": []
+      },
+      "alarm_message": [
+        "Guluton提醒您：今天是全员核酸，九点登记系统"
+      ],
+      "snooze": [],
+      "repeat": {
+        "repeat_type": "no"
+      }
+    },
+    {
+      "set_by": "admin",
+      "alarm_name": "全员核酸填报提醒",
+      "alarm_time": [
+        2022,
+        1,
+        1,
+        8,
+        45,
+        0,
+        0
+      ],
+      "alarm_target": {
+        "group_id": [],
+        "user_id": []
+      },
+      "alarm_message": [
+        "嗨，提醒你登记填报核酸信息,别忘了发截图给宿舍长"
+      ],
+      "snooze": [],
+      "repeat": {
+        "repeat_type": "no"
+      }
+    }
+  ]
+}
